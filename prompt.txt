@@ -1,0 +1,33 @@
+<ApplicationSpec>
+  <Overview>
+    <Name>People Puppers</Name>
+    <Purpose>Take a selfie and then use it to identify which breed of dog the person is.</Purpose>
+    <Audience>Friends and family, but really anybody</Audience>
+  </Overview>
+
+  <UserFlow>
+    <EntryPoint>User sees a People Puppers logo</EntryPoint>
+    <KeyInteractions>
+      - take a photo
+      - provide feedback the photo was successfully captured
+      - identify which breed of dog the person in the selfie most resembles based on hair, skin tone, and eye color
+    </KeyInteractions>
+    <Outcome>
+      - show a PHOTO of the breed of dog the selfie most resembles
+      - say WHY you think the person in the selfie is like the dog breed
+      - show INFORMATION about the dog breed
+    </Outcome>
+  </UserFlow>
+
+  <Resources>
+      - Get a PHOTO of the breed from https://dog.ceo/dog-api/documentation/
+      - Use the The Dog API for breed INFORMATION
+        - The Dog API key: live_XcdMQZ9hDZwYS7OLxj30CnrYAh8v0lnVCtNv0EB0sjuRPBo2BhISizF1YPdE8T3w
+        - Use it as the 'x-api-key' header when making any request to the API, or by adding as a query string parameter e.g. 'api_key=live_XcdMQZ9hDZwYS7OLxj30CnrYAh8v0lnVCtNv0EB0sjuRPBo2BhISizF1YPdE8T3w'
+        - API documentation here: https://docs.thedogapi.com/docs/authorization
+  </Resources>
+
+  <SuccessCriteria>
+      - User will see their selfie next to the photo of the dog, with reason for choosing dog breed, and then information about the breed. 
+  </SuccessCriteria>
+</ApplicationSpec>
