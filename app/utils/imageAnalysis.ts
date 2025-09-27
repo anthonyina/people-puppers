@@ -30,9 +30,8 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  let h: number, s: number, l: number;
-
-  l = (max + min) / 2;
+  let h: number, s: number;
+  const l = (max + min) / 2;
 
   if (max === min) {
     h = s = 0;
@@ -78,7 +77,7 @@ function getColorName(r: number, g: number, b: number): string {
 
 // Determine skin tone
 function getSkinTone(r: number, g: number, b: number): { tone: string; warmth: 'warm' | 'cool' | 'neutral' } {
-  const [h, s, l] = rgbToHsl(r, g, b);
+  const [h, , l] = rgbToHsl(r, g, b);
 
   let tone: string;
   let warmth: 'warm' | 'cool' | 'neutral';

@@ -1,5 +1,5 @@
 import { ColorAnalysis, FacialFeatures } from './imageAnalysis';
-import { getRandomDogImage, getBreedInfo, normalizeBreedName, DogBreedInfo } from './dogApi';
+import { getRandomDogImage, getBreedInfo, normalizeBreedName } from './dogApi';
 import { loadAllBreeds, getRandomBreedSelection, filterBreedsByCharacteristics, DynamicBreedCharacteristics } from './dynamicBreedLoader';
 
 export interface BreedMatch {
@@ -149,7 +149,7 @@ function colorSimilarity(color1: string, color2: string): number {
     'gray': ['Gray', 'Silver']
   };
 
-  for (const [group, colors] of Object.entries(colorGroups)) {
+  for (const [, colors] of Object.entries(colorGroups)) {
     if (colors.includes(color1) && colors.includes(color2)) {
       return 1.0; // Perfect match within group
     }
@@ -207,7 +207,10 @@ function calculateDynamicBreedScore(features: ColorAnalysis, breed: DynamicBreed
   score += intensityMatch * 0.1;
   factors += 0.1;
 
-  return factors > 0 ? score / factors : 0;
+  const baseScore = factors > 0 ? score / factors : 0;
+
+  // Apply popularity weighting - popular breeds get a boost, exotic breeds get reduced
+  return baseScore * breed.popularityWeight;
 }
 
 // Calculate breed match score based on facial features (legacy static version)
@@ -291,7 +294,7 @@ function generateDynamicReasoning(features: ColorAnalysis, breed: DynamicBreedCh
     reasons.push('your overall coloring and features create a harmonious match with this breed');
   }
 
-  return `Based on our analysis, ${reasons.join(', and ')}. This creates a ${Math.round(score * 100)}% compatibility match!`;
+  return `Based on our analysis, ${reasons.join(', and ')}. This creates a ${Math.round(Math.min(score, 1.0) * 100)}% compatibility match!`;
 }
 
 // Generate reasoning for the breed match (legacy static version)
@@ -331,7 +334,7 @@ function generateReasoning(features: ColorAnalysis, breed: BreedCharacteristics,
     reasons.push('your overall coloring and features create a harmonious match with this breed');
   }
 
-  return `Based on our analysis, ${reasons.join(', and ')}. This creates a ${Math.round(score * 100)}% compatibility match!`;
+  return `Based on our analysis, ${reasons.join(', and ')}. This creates a ${Math.round(Math.min(score, 1.0) * 100)}% compatibility match!`;
 }
 
 // Main function to find the best dog breed match

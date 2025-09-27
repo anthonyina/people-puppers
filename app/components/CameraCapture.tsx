@@ -74,9 +74,10 @@ export default function CameraCapture({ onImageCapture }: CameraCaptureProps) {
       } else {
         console.error('Video ref is null');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error accessing camera:', err);
-      setError(`Unable to access camera: ${err.message}. Please check permissions or try uploading a photo instead.`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Unable to access camera: ${errorMessage}. Please check permissions or try uploading a photo instead.`);
       setIsStartingCamera(false);
     }
   }, []);

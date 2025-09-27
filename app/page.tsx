@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import CameraCapture from './components/CameraCapture';
 import BreedResults from './components/BreedResults';
+import { BreedMatch } from './utils/breedMatcher';
 
 export default function Home() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [breedMatch, setBreedMatch] = useState<any>(null);
+  const [breedMatch, setBreedMatch] = useState<BreedMatch | null>(null);
 
   const handleImageCapture = async (imageDataUrl: string) => {
     setCapturedImage(imageDataUrl);
@@ -96,7 +97,7 @@ export default function Home() {
 
           {/* Message */}
           <p className="text-gray-700 text-lg mb-6 leading-relaxed">
-            Hi, I'm Charlotte! 🐶✨ I'm 12 years old and love dogs. 🐾 If the app was fun for you, a small donation would mean a lot 🙏 and help me keep learning! 📚
+            Hi, I&apos;m Charlotte! 🐶✨ I&apos;m 12 years old and love dogs. 🐾 If the app was fun for you, a small donation would mean a lot 🙏 and help me keep learning! 📚
           </p>
 
           {/* Donation Buttons */}
