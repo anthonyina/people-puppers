@@ -29,9 +29,9 @@ export const metadata: Metadata = {
     siteName: "People Puppers",
     images: [
       {
-        url: "/charlotte_and_willie.png",
+        url: "/charlotte_and_willie_square.PNG",
         width: 1200,
-        height: 630,
+        height: 1200,
         alt: "People Puppers - Find Your Dog Breed Twin",
       },
     ],
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "🐶 People Puppers - Find Your Dog Breed Twin!",
     description: "Take a selfie and discover which dog breed you look like! AI-powered facial analysis matches your features to over 200 dog breeds.",
-    images: ["/charlotte_and_willie.png"],
+    images: ["/charlotte_and_willie_square.PNG"],
   },
 };
 
