@@ -44,8 +44,10 @@ export default function Home() {
     setCapturedImage(null);
     setBreedMatch(null);
     setIsAnalyzing(false);
-    // Scroll to top of page
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to top of page after DOM updates
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   return (
