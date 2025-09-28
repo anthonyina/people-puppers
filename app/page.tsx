@@ -44,6 +44,8 @@ export default function Home() {
     setCapturedImage(null);
     setBreedMatch(null);
     setIsAnalyzing(false);
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
