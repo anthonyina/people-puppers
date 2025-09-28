@@ -1,7 +1,31 @@
 declare global {
   interface Window {
-    FaceDetection: any;
+    FaceDetection: new (config: { locateFile: (file: string) => string }) => FaceDetectionInstance;
   }
+}
+
+interface FaceDetection {
+  new (config: { locateFile: (file: string) => string }): FaceDetectionInstance;
+}
+
+interface FaceDetectionInstance {
+  setOptions(options: { model: string; minDetectionConfidence: number }): void;
+  onResults(callback: (results: MediaPipeResults) => void): void;
+  initialize(): Promise<void>;
+  send(inputs: { image: HTMLImageElement }): void;
+}
+
+interface MediaPipeResults {
+  detections?: Array<{
+    score: number;
+    boundingBox: {
+      xCenter: number;
+      yCenter: number;
+      width: number;
+      height: number;
+    };
+    landmarks: Array<{ x: number; y: number }>;
+  }>;
 }
 
 export interface FaceDetectionResult {
@@ -22,7 +46,7 @@ export interface FaceDetectionResult {
   confidence: number;
 }
 
-let faceDetection: any = null;
+let faceDetection: FaceDetectionInstance | null = null;
 
 // Initialize MediaPipe Face Detection
 export async function initializeFaceDetection(): Promise<void> {
@@ -49,18 +73,18 @@ export async function initializeFaceDetection(): Promise<void> {
         minDetectionConfidence: 0.5,
       });
 
-      faceDetection.onResults((results: any) => {
+      faceDetection.onResults((results: MediaPipeResults) => {
         // Results will be handled by the caller
       });
 
       faceDetection.initialize().then(() => {
         console.log('MediaPipe Face Detection initialized successfully');
         resolve();
-      }).catch((error: any) => {
+      }).catch((error: unknown) => {
         console.error('Failed to initialize MediaPipe Face Detection:', error);
         reject(error);
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error setting up MediaPipe Face Detection:', error);
       reject(error);
     }
@@ -77,7 +101,7 @@ export async function detectFaces(imageElement: HTMLImageElement): Promise<FaceD
 
     let resultsReceived = false;
 
-    faceDetection.onResults((results: any) => {
+    faceDetection.onResults((results: MediaPipeResults) => {
       if (resultsReceived) return;
       resultsReceived = true;
 
@@ -139,7 +163,7 @@ export async function detectFaces(imageElement: HTMLImageElement): Promise<FaceD
 
     try {
       faceDetection.send({ image: imageElement });
-    } catch (error) {
+    } catch (error: unknown) {
       reject(error);
     }
 

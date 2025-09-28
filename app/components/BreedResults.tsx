@@ -70,7 +70,7 @@ export default function BreedResults({ userImage, breedMatch, onReset }: BreedRe
         {/* Dog Photo */}
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-700 mb-4">Your Dog Twin</h3>
-          <div className="relative rounded-xl overflow-hidden shadow-lg bg-gray-100 group">
+          <div className="relative rounded-xl overflow-hidden shadow-lg bg-gray-100">
             <img
               src={currentDogImage}
               alt={`${breedMatch.breed} dog`}
@@ -84,7 +84,7 @@ export default function BreedResults({ userImage, breedMatch, onReset }: BreedRe
             <button
               onClick={refreshDogImage}
               disabled={isLoadingNewImage}
-              className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 disabled:opacity-50"
+              className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-colors duration-200 disabled:opacity-50"
               title="Get another photo of this breed"
             >
               {isLoadingNewImage ? (

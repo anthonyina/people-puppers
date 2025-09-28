@@ -1,4 +1,4 @@
-import { ColorAnalysis, FacialFeatures, VisualFeatures } from './imageAnalysis';
+import { ColorAnalysis, FacialFeatures } from './imageAnalysis';
 import { getRandomDogImage, getBreedInfo, normalizeBreedName, getBreedDescriptionFromWikipedia } from './dogApi';
 import { loadAllBreeds, getRandomBreedSelection, filterBreedsByCharacteristics, DynamicBreedCharacteristics } from './dynamicBreedLoader';
 
@@ -174,7 +174,7 @@ const VISUAL_FEATURE_BREED_PREFERENCES = {
 };
 
 // Apply visual feature bonuses to breed scores
-function applyVisualFeatureBonuses(facialFeatures: FacialFeatures, breedScores: { breed: any; score: number }[]): { breed: any; score: number }[] {
+function applyVisualFeatureBonuses(facialFeatures: FacialFeatures, breedScores: { breed: string | BreedCharacteristics | DynamicBreedCharacteristics; score: number }[]): { breed: string | BreedCharacteristics | DynamicBreedCharacteristics; score: number }[] {
   if (!facialFeatures.visualFeatures) {
     return breedScores;
   }
@@ -184,9 +184,14 @@ function applyVisualFeatureBonuses(facialFeatures: FacialFeatures, breedScores: 
   return breedScores.map(item => {
     let bonusScore = 0;
     // Handle both string breed names and breed objects
-    const breedName = typeof item.breed === 'string'
-      ? item.breed.toLowerCase()
-      : (item.breed.fullName || item.breed.name || 'unknown').toLowerCase();
+    let breedName: string;
+    if (typeof item.breed === 'string') {
+      breedName = item.breed.toLowerCase();
+    } else if ('fullName' in item.breed) {
+      breedName = (item.breed.fullName || item.breed.name || 'unknown').toLowerCase();
+    } else {
+      breedName = (item.breed.name || 'unknown').toLowerCase();
+    }
 
     // White hair bonus
     if (features.isWhiteHaired) {
@@ -373,7 +378,7 @@ function calculateBreedScore(features: ColorAnalysis, breed: BreedCharacteristic
 }
 
 // Generate reasoning for dynamic breed match
-function generateDynamicReasoning(features: ColorAnalysis, breed: DynamicBreedCharacteristics, score: number): string {
+function generateDynamicReasoning(features: ColorAnalysis, breed: DynamicBreedCharacteristics): string {
   const reasons: string[] = [];
 
   // Hair color reasoning
@@ -410,7 +415,7 @@ function generateDynamicReasoning(features: ColorAnalysis, breed: DynamicBreedCh
 }
 
 // Generate reasoning for the breed match (legacy static version)
-function generateReasoning(features: ColorAnalysis, breed: BreedCharacteristics, score: number): string {
+function generateReasoning(features: ColorAnalysis, breed: BreedCharacteristics): string {
   const reasons: string[] = [];
 
   // Hair color reasoning
@@ -467,14 +472,18 @@ export async function findBreedMatch(facialFeatures: FacialFeatures): Promise<Br
   const topMatches = breedScores.filter(b => b.score >= bestMatch.score - 0.1).slice(0, 3);
   const selectedMatch = topMatches[Math.floor(Math.random() * topMatches.length)];
 
-  const breedName = selectedMatch.breed.name;
+  const breedName = typeof selectedMatch.breed === 'string'
+    ? selectedMatch.breed
+    : selectedMatch.breed.name;
   const confidence = Math.min(selectedMatch.score + 0.1 + Math.random() * 0.1, 0.95); // Add some variance
 
   // Get dog image and breed information
   const dogImage = await getRandomDogImage(normalizeBreedName(breedName));
   const breedInfo = await getBreedInfo(breedName);
 
-  const reasoning = generateReasoning(colors, selectedMatch.breed, selectedMatch.score);
+  const reasoning = typeof selectedMatch.breed === 'string'
+    ? `Based on our analysis, your features create a harmonious match with the ${selectedMatch.breed} breed.`
+    : generateReasoning(colors, selectedMatch.breed);
 
   const result: BreedMatch = {
     breed: breedName,
@@ -510,7 +519,7 @@ export async function getBreedSuggestions(facialFeatures: FacialFeatures, count:
   }));
 
   // Apply visual feature bonuses
-  breedScores = applyVisualFeatureBonuses(facialFeatures, breedScores);
+  breedScores = applyVisualFeatureBonuses(facialFeatures, breedScores) as { breed: BreedCharacteristics; score: number }[];
 
   // Sort by score and get top matches
   breedScores.sort((a, b) => b.score - a.score);
@@ -525,7 +534,7 @@ export async function getBreedSuggestions(facialFeatures: FacialFeatures, count:
     const dogImage = await getRandomDogImage(normalizeBreedName(breedName));
     const breedInfo = await getBreedInfo(breedName);
 
-    const reasoning = generateReasoning(colors, match.breed, match.score);
+    const reasoning = generateReasoning(colors, match.breed);
 
     const result: BreedMatch = {
       breed: breedName,
@@ -609,7 +618,7 @@ export async function findBreedMatchFromAllBreeds(facialFeatures: FacialFeatures
     const topMatches = breedScores.filter(b => b.score >= bestMatch.score - 0.1).slice(0, 3);
     const selectedMatch = topMatches[Math.floor(Math.random() * topMatches.length)];
 
-    const breedName = selectedMatch.breed.name;
+    const breedName = typeof selectedMatch.breed === 'string' ? selectedMatch.breed : selectedMatch.breed.name;
     const confidence = Math.min(selectedMatch.score + 0.1 + Math.random() * 0.1, 0.95);
 
     console.log(`Best match: ${breedName} with ${Math.round(confidence * 100)}% confidence`);
@@ -618,7 +627,7 @@ export async function findBreedMatchFromAllBreeds(facialFeatures: FacialFeatures
     const dogImage = await getRandomDogImage(normalizeBreedName(breedName));
     const breedInfo = await getBreedInfo(breedName);
 
-    const reasoning = generateDynamicReasoning(colors, selectedMatch.breed, selectedMatch.score);
+    const reasoning = generateDynamicReasoning(colors, selectedMatch.breed);
 
     const result: BreedMatch = {
       breed: breedName,
