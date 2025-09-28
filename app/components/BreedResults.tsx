@@ -1,10 +1,14 @@
 'use client';
 
+import { useState } from 'react';
+
 interface BreedMatch {
   breed: string;
   confidence: number;
   reasoning: string;
   dogImage: string;
+  faceShape?: 'oval' | 'round' | 'square' | 'heart' | 'diamond';
+  numberOfFaces?: number;
   breedInfo?: {
     temperament: string;
     origin: string;
@@ -22,6 +26,22 @@ interface BreedResultsProps {
 
 export default function BreedResults({ userImage, breedMatch, onReset }: BreedResultsProps) {
   const confidencePercentage = Math.round(breedMatch.confidence * 100);
+  const [currentDogImage, setCurrentDogImage] = useState(breedMatch.dogImage);
+  const [isLoadingNewImage, setIsLoadingNewImage] = useState(false);
+
+  const refreshDogImage = async () => {
+    setIsLoadingNewImage(true);
+    try {
+      // Import the dog API function
+      const { getRandomDogImage, normalizeBreedName } = await import('../utils/dogApi');
+      const newImage = await getRandomDogImage(normalizeBreedName(breedMatch.breed));
+      setCurrentDogImage(newImage);
+    } catch (error) {
+      console.error('Failed to load new dog image:', error);
+    } finally {
+      setIsLoadingNewImage(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-8 max-w-6xl mx-auto">
@@ -30,7 +50,6 @@ export default function BreedResults({ userImage, breedMatch, onReset }: BreedRe
         <div className="flex items-center justify-center gap-2 text-lg">
           <span className="text-2xl">🎉</span>
           <span className="font-semibold text-blue-600">{breedMatch.breed}</span>
-          <span className="text-gray-500">({confidencePercentage}% match)</span>
         </div>
       </div>
 
@@ -51,16 +70,31 @@ export default function BreedResults({ userImage, breedMatch, onReset }: BreedRe
         {/* Dog Photo */}
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-700 mb-4">Your Dog Twin</h3>
-          <div className="relative rounded-xl overflow-hidden shadow-lg bg-gray-100">
+          <div className="relative rounded-xl overflow-hidden shadow-lg bg-gray-100 group">
             <img
-              src={breedMatch.dogImage}
+              src={currentDogImage}
               alt={`${breedMatch.breed} dog`}
-              className="w-full h-80 object-cover"
+              className="w-full h-80 object-cover transition-opacity duration-200"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = 'https://images.dog.ceo/breeds/retriever-golden/n02099601_1.jpg';
               }}
             />
+            {/* Refresh Button Overlay */}
+            <button
+              onClick={refreshDogImage}
+              disabled={isLoadingNewImage}
+              className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 disabled:opacity-50"
+              title="Get another photo of this breed"
+            >
+              {isLoadingNewImage ? (
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
       </div>

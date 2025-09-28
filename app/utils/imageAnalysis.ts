@@ -16,10 +16,26 @@ export interface ColorAnalysis {
   };
 }
 
+import { initializeFaceDetection, detectFaces, getFaceRegions, FaceDetectionResult } from './faceDetection';
+
+export interface VisualFeatures {
+  hasBeard: boolean;
+  hasMustache: boolean;
+  hasGlasses: boolean;
+  isWhiteHaired: boolean;
+  isGrayHaired: boolean;
+  hasFacialHair: boolean;
+  hasLongHair: boolean;
+  hairLength: 'short' | 'medium' | 'long';
+}
+
 export interface FacialFeatures {
   colors: ColorAnalysis;
   faceDetected: boolean;
   confidence: number;
+  faceShape?: 'oval' | 'round' | 'square' | 'heart' | 'diamond';
+  numberOfFaces: number;
+  visualFeatures?: VisualFeatures;
 }
 
 // Convert RGB to HSL for better color analysis
@@ -124,7 +140,158 @@ function getEyeColor(r: number, g: number, b: number): { color: string; intensit
   return { color, intensity };
 }
 
-// Analyze dominant colors in different regions of the face
+// Analyze colors from specific rectangular regions
+function analyzeRegionColorsFromRect(imageData: ImageData, region: { x: number; y: number; width: number; height: number }): { r: number; g: number; b: number } {
+  let totalR = 0, totalG = 0, totalB = 0;
+  let count = 0;
+
+  const { data, width } = imageData;
+
+  for (let y = Math.floor(region.y); y < Math.floor(region.y + region.height); y++) {
+    for (let x = Math.floor(region.x); x < Math.floor(region.x + region.width); x++) {
+      if (x >= 0 && x < width && y >= 0 && y < imageData.height) {
+        const index = (y * width + x) * 4;
+        const a = data[index + 3];
+
+        if (a > 128) { // Only consider non-transparent pixels
+          totalR += data[index];
+          totalG += data[index + 1];
+          totalB += data[index + 2];
+          count++;
+        }
+      }
+    }
+  }
+
+  if (count === 0) return { r: 100, g: 100, b: 100 };
+
+  return {
+    r: Math.round(totalR / count),
+    g: Math.round(totalG / count),
+    b: Math.round(totalB / count)
+  };
+}
+
+// Detect visual features from face analysis
+function detectVisualFeatures(face: FaceDetectionResult, imageData: ImageData, colors: ColorAnalysis): VisualFeatures {
+  const regions = getFaceRegions(face, imageData.width, imageData.height);
+
+  // Check for white/gray hair
+  const isWhiteHaired = colors.hairColor.dominant.toLowerCase().includes('white') ||
+                       colors.hairColor.dominant.toLowerCase().includes('platinum');
+  const isGrayHaired = colors.hairColor.dominant.toLowerCase().includes('gray') ||
+                      colors.hairColor.dominant.toLowerCase().includes('grey') ||
+                      colors.hairColor.dominant.toLowerCase().includes('silver');
+
+  // Detect facial hair by analyzing regions below the nose
+  const { landmarks, boundingBox } = face;
+
+  // Beard region: below mouth to jaw
+  const beardRegion = {
+    x: Math.max(boundingBox.x + boundingBox.width * 0.3, 0),
+    y: Math.max(landmarks.mouthCenter.y + 10, 0),
+    width: Math.min(boundingBox.width * 0.4, imageData.width - (boundingBox.x + boundingBox.width * 0.3)),
+    height: Math.max(10, boundingBox.y + boundingBox.height - landmarks.mouthCenter.y - 10)
+  };
+
+  // Mustache region: between nose and mouth
+  const mustacheRegion = {
+    x: Math.max(landmarks.mouthCenter.x - 30, 0),
+    y: Math.max(landmarks.noseTip.y + 5, 0),
+    width: Math.min(60, imageData.width - (landmarks.mouthCenter.x - 30)),
+    height: Math.max(5, landmarks.mouthCenter.y - landmarks.noseTip.y - 5)
+  };
+
+  // Analyze these regions for dark colors (indicating hair)
+  const beardColor = analyzeRegionColorsFromRect(imageData, beardRegion);
+  const mustacheColor = analyzeRegionColorsFromRect(imageData, mustacheRegion);
+  const skinColor = analyzeRegionColorsFromRect(imageData, regions.skin);
+
+  // Calculate if beard/mustache regions are significantly darker than skin
+  const beardDarkness = (beardColor.r + beardColor.g + beardColor.b) / 3;
+  const mustacheDarkness = (mustacheColor.r + mustacheColor.g + mustacheColor.b) / 3;
+  const skinBrightness = (skinColor.r + skinColor.g + skinColor.b) / 3;
+
+  const hasBeard = (skinBrightness - beardDarkness) > 30 && beardDarkness < 120;
+  const hasMustache = (skinBrightness - mustacheDarkness) > 25 && mustacheDarkness < 100;
+  const hasFacialHair = hasBeard || hasMustache;
+
+  // Detect hair length based on hair region size relative to face
+  const hairRegionArea = regions.hair.width * regions.hair.height;
+  const faceArea = boundingBox.width * boundingBox.height;
+  const hairToFaceRatio = hairRegionArea / faceArea;
+
+  let hairLength: 'short' | 'medium' | 'long' = 'medium';
+  if (hairToFaceRatio < 0.15) {
+    hairLength = 'short';
+  } else if (hairToFaceRatio > 0.4) {
+    hairLength = 'long';
+  }
+
+  const hasLongHair = hairLength === 'long';
+
+  // Simple glasses detection (looking for symmetrical dark regions around eyes)
+  const rightEyeColor = analyzeRegionColorsFromRect(imageData, regions.rightEye);
+  const leftEyeColor = analyzeRegionColorsFromRect(imageData, regions.leftEye);
+  const avgEyeBrightness = ((rightEyeColor.r + rightEyeColor.g + rightEyeColor.b) +
+                           (leftEyeColor.r + leftEyeColor.g + leftEyeColor.b)) / 6;
+
+  // Glasses detection is basic - very dark eye regions might indicate glasses
+  const hasGlasses = avgEyeBrightness < 60;
+
+  return {
+    hasBeard,
+    hasMustache,
+    hasGlasses,
+    isWhiteHaired,
+    isGrayHaired,
+    hasFacialHair,
+    hasLongHair,
+    hairLength
+  };
+}
+
+// Determine face shape from landmarks
+function determineFaceShape(face: FaceDetectionResult): 'oval' | 'round' | 'square' | 'heart' | 'diamond' {
+  const { boundingBox, landmarks } = face;
+
+  // Calculate face width to height ratio
+  const faceRatio = boundingBox.width / boundingBox.height;
+
+  // Calculate jaw width (distance between ear tragions)
+  const jawWidth = Math.abs(landmarks.leftEarTragion.x - landmarks.rightEarTragion.x);
+
+  // Calculate forehead width (approximate from eye distance)
+  const eyeDistance = Math.abs(landmarks.leftEye.x - landmarks.rightEye.x);
+  const foreheadWidth = eyeDistance * 1.3; // Approximate
+
+  // Calculate cheek width (widest part of face)
+  const cheekWidth = boundingBox.width;
+
+  // Determine face shape based on ratios and proportions
+  if (faceRatio > 0.9) {
+    // Wide face - could be round or square
+    if (jawWidth / cheekWidth > 0.85) {
+      return 'square';
+    } else {
+      return 'round';
+    }
+  } else if (faceRatio < 0.75) {
+    // Narrow face - could be oval, heart, or diamond
+    if (foreheadWidth > jawWidth * 1.2) {
+      return 'heart';
+    } else if (jawWidth < cheekWidth * 0.8) {
+      return 'diamond';
+    } else {
+      return 'oval';
+    }
+  } else {
+    // Medium proportions - likely oval
+    return 'oval';
+  }
+}
+
+// Analyze dominant colors in different regions of the face (legacy function)
 function analyzeRegionColors(imageData: ImageData, regions: { hair: number[]; skin: number[]; eyes: number[] }): ColorAnalysis {
   const getRegionColor = (pixels: number[]) => {
     let totalR = 0, totalG = 0, totalB = 0;
@@ -184,8 +351,149 @@ function analyzeRegionColors(imageData: ImageData, regions: { hair: number[]; sk
   };
 }
 
-// Main function to analyze facial features from image
+// New main function using MediaPipe face detection
 export async function analyzeFacialFeatures(imageDataUrl: string): Promise<FacialFeatures> {
+  try {
+    // Initialize face detection if not already done
+    await initializeFaceDetection();
+
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = async () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx?.drawImage(img, 0, 0);
+
+        const imageData = ctx?.getImageData(0, 0, canvas.width, canvas.height);
+
+        if (!imageData) {
+          resolve(getFallbackResult());
+          return;
+        }
+
+        try {
+          // Detect faces using MediaPipe
+          const faces = await detectFaces(img);
+
+          if (faces.length === 0) {
+            // No faces detected - fall back to old method
+            console.log('No faces detected, falling back to geometric analysis');
+            const legacyResult = await analyzeFacialFeaturesLegacy(imageDataUrl);
+            resolve({
+              ...legacyResult,
+              numberOfFaces: 0,
+              faceDetected: false
+            });
+            return;
+          }
+
+          // Use the first detected face (highest confidence)
+          const primaryFace = faces[0];
+          console.log('Face detected with confidence:', primaryFace.confidence);
+
+          // Get face regions based on detected landmarks
+          const regions = getFaceRegions(primaryFace, canvas.width, canvas.height);
+
+          // Analyze colors from detected regions
+          const hairColor = analyzeRegionColorsFromRect(imageData, regions.hair);
+          const skinColor = analyzeRegionColorsFromRect(imageData, regions.skin);
+          const rightEyeColor = analyzeRegionColorsFromRect(imageData, regions.rightEye);
+          const leftEyeColor = analyzeRegionColorsFromRect(imageData, regions.leftEye);
+
+          // Average the eye colors
+          const eyeColor = {
+            r: Math.round((rightEyeColor.r + leftEyeColor.r) / 2),
+            g: Math.round((rightEyeColor.g + leftEyeColor.g) / 2),
+            b: Math.round((rightEyeColor.b + leftEyeColor.b) / 2)
+          };
+
+          // Determine face shape
+          const faceShape = determineFaceShape(primaryFace);
+
+          // Generate color analysis
+          const hairName = getColorName(hairColor.r, hairColor.g, hairColor.b);
+          const skinAnalysis = getSkinTone(skinColor.r, skinColor.g, skinColor.b);
+          const eyeAnalysis = getEyeColor(eyeColor.r, eyeColor.g, eyeColor.b);
+
+          const colors: ColorAnalysis = {
+            hairColor: {
+              dominant: hairName,
+              hex: rgbToHex(hairColor.r, hairColor.g, hairColor.b),
+              confidence: 0.9
+            },
+            skinTone: {
+              dominant: skinAnalysis.tone,
+              hex: rgbToHex(skinColor.r, skinColor.g, skinColor.b),
+              warmth: skinAnalysis.warmth
+            },
+            eyeColor: {
+              dominant: eyeAnalysis.color,
+              hex: rgbToHex(eyeColor.r, eyeColor.g, eyeColor.b),
+              intensity: eyeAnalysis.intensity
+            }
+          };
+
+          // Detect visual features
+          const visualFeatures = detectVisualFeatures(primaryFace, imageData, colors);
+
+          resolve({
+            colors,
+            faceDetected: true,
+            confidence: primaryFace.confidence,
+            faceShape,
+            numberOfFaces: faces.length,
+            visualFeatures
+          });
+
+        } catch (detectionError) {
+          console.error('Face detection failed, falling back to legacy method:', detectionError);
+          const legacyResult = await analyzeFacialFeaturesLegacy(imageDataUrl);
+          resolve({
+            ...legacyResult,
+            numberOfFaces: 0
+          });
+        }
+      };
+
+      img.onerror = () => {
+        resolve({
+          ...getFallbackResult(),
+          numberOfFaces: 0
+        });
+      };
+
+      img.src = imageDataUrl;
+    });
+
+  } catch (initError) {
+    console.error('Failed to initialize face detection, using legacy method:', initError);
+    const legacyResult = await analyzeFacialFeaturesLegacy(imageDataUrl);
+    return {
+      ...legacyResult,
+      numberOfFaces: 0
+    };
+  }
+}
+
+// Fallback result when everything fails
+function getFallbackResult(): FacialFeatures {
+  return {
+    colors: {
+      hairColor: { dominant: 'Brown', hex: '#8B4513', confidence: 0.5 },
+      skinTone: { dominant: 'Medium', hex: '#DDBEA9', warmth: 'neutral' },
+      eyeColor: { dominant: 'Brown', hex: '#654321', intensity: 'medium' }
+    },
+    faceDetected: false,
+    confidence: 0.3,
+    numberOfFaces: 0
+  };
+}
+
+// Legacy function for fallback (renamed the original function)
+async function analyzeFacialFeaturesLegacy(imageDataUrl: string): Promise<FacialFeatures> {
   return new Promise((resolve) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -206,7 +514,8 @@ export async function analyzeFacialFeatures(imageDataUrl: string): Promise<Facia
             eyeColor: { dominant: 'Brown', hex: '#654321', intensity: 'medium' }
           },
           faceDetected: false,
-          confidence: 0.3
+          confidence: 0.3,
+          numberOfFaces: 0
         });
         return;
       }
@@ -282,7 +591,8 @@ export async function analyzeFacialFeatures(imageDataUrl: string): Promise<Facia
       resolve({
         colors,
         faceDetected: true,
-        confidence: 0.75
+        confidence: 0.75,
+        numberOfFaces: 1
       });
     };
 
@@ -294,7 +604,8 @@ export async function analyzeFacialFeatures(imageDataUrl: string): Promise<Facia
           eyeColor: { dominant: 'Brown', hex: '#654321', intensity: 'medium' }
         },
         faceDetected: false,
-        confidence: 0.3
+        confidence: 0.3,
+        numberOfFaces: 0
       });
     };
 

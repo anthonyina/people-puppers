@@ -1,4 +1,4 @@
-import { ColorAnalysis, FacialFeatures } from './imageAnalysis';
+import { ColorAnalysis, FacialFeatures, VisualFeatures } from './imageAnalysis';
 import { getRandomDogImage, getBreedInfo, normalizeBreedName, getBreedDescriptionFromWikipedia } from './dogApi';
 import { loadAllBreeds, getRandomBreedSelection, filterBreedsByCharacteristics, DynamicBreedCharacteristics } from './dynamicBreedLoader';
 
@@ -7,6 +7,8 @@ export interface BreedMatch {
   confidence: number;
   reasoning: string;
   dogImage: string;
+  faceShape?: 'oval' | 'round' | 'square' | 'heart' | 'diamond';
+  numberOfFaces?: number;
   breedInfo?: {
     temperament: string;
     origin: string;
@@ -139,6 +141,116 @@ const DOG_BREEDS: BreedCharacteristics[] = [
 ];
 
 // Calculate color similarity using RGB distance
+// Visual feature preference rules for dog breeds
+const VISUAL_FEATURE_BREED_PREFERENCES = {
+  whiteHaired: {
+    primaryBreeds: ['Great Pyrenees', 'Samoyed', 'American Eskimo Dog', 'West Highland White Terrier', 'Maltese', 'Bichon Frise', 'White Swiss Shepherd'],
+    boost: 0.3
+  },
+  grayHaired: {
+    primaryBreeds: ['Weimaraner', 'Kerry Blue Terrier', 'Bedlington Terrier', 'Old English Sheepdog', 'Irish Wolfhound'],
+    boost: 0.25
+  },
+  facialHair: {
+    primaryBreeds: ['Bearded Collie', 'Schnauzer', 'Irish Wolfhound', 'Airedale Terrier', 'Yorkshire Terrier', 'Afghan Hound', 'Brussels Griffon', 'Wirehaired Fox Terrier'],
+    boost: 0.35
+  },
+  beard: {
+    primaryBreeds: ['Bearded Collie', 'Schnauzer', 'Irish Wolfhound', 'Airedale Terrier', 'Brussels Griffon', 'Briard'],
+    boost: 0.4
+  },
+  mustache: {
+    primaryBreeds: ['Schnauzer', 'Brussels Griffon', 'Wirehaired Fox Terrier', 'German Wirehaired Pointer'],
+    boost: 0.35
+  },
+  longHair: {
+    primaryBreeds: ['Afghan Hound', 'Yorkshire Terrier', 'Shih Tzu', 'Lhasa Apso', 'Maltese', 'Cocker Spaniel', 'Golden Retriever', 'Collie'],
+    boost: 0.2
+  },
+  glasses: {
+    primaryBreeds: ['Poodle', 'Bichon Frise', 'Maltese', 'Havanese', 'Coton de Tulear'], // Smart-looking, fluffy breeds
+    boost: 0.15
+  }
+};
+
+// Apply visual feature bonuses to breed scores
+function applyVisualFeatureBonuses(facialFeatures: FacialFeatures, breedScores: { breed: any; score: number }[]): { breed: any; score: number }[] {
+  if (!facialFeatures.visualFeatures) {
+    return breedScores;
+  }
+
+  const features = facialFeatures.visualFeatures;
+
+  return breedScores.map(item => {
+    let bonusScore = 0;
+    // Handle both string breed names and breed objects
+    const breedName = typeof item.breed === 'string'
+      ? item.breed.toLowerCase()
+      : (item.breed.fullName || item.breed.name || 'unknown').toLowerCase();
+
+    // White hair bonus
+    if (features.isWhiteHaired) {
+      const whiteBreeds = VISUAL_FEATURE_BREED_PREFERENCES.whiteHaired.primaryBreeds;
+      if (whiteBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.whiteHaired.boost;
+      }
+    }
+
+    // Gray hair bonus
+    if (features.isGrayHaired) {
+      const grayBreeds = VISUAL_FEATURE_BREED_PREFERENCES.grayHaired.primaryBreeds;
+      if (grayBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.grayHaired.boost;
+      }
+    }
+
+    // Beard bonus (strongest preference)
+    if (features.hasBeard) {
+      const beardBreeds = VISUAL_FEATURE_BREED_PREFERENCES.beard.primaryBreeds;
+      if (beardBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.beard.boost;
+      }
+    }
+
+    // Mustache bonus
+    if (features.hasMustache) {
+      const mustacheBreeds = VISUAL_FEATURE_BREED_PREFERENCES.mustache.primaryBreeds;
+      if (mustacheBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.mustache.boost;
+      }
+    }
+
+    // General facial hair bonus (for breeds not covered by specific beard/mustache)
+    if (features.hasFacialHair && bonusScore === 0) {
+      const facialHairBreeds = VISUAL_FEATURE_BREED_PREFERENCES.facialHair.primaryBreeds;
+      if (facialHairBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.facialHair.boost;
+      }
+    }
+
+    // Long hair bonus
+    if (features.hasLongHair) {
+      const longHairBreeds = VISUAL_FEATURE_BREED_PREFERENCES.longHair.primaryBreeds;
+      if (longHairBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.longHair.boost;
+      }
+    }
+
+    // Glasses bonus (intellectual/refined breeds)
+    if (features.hasGlasses) {
+      const smartBreeds = VISUAL_FEATURE_BREED_PREFERENCES.glasses.primaryBreeds;
+      if (smartBreeds.some(breed => breedName.includes(breed.toLowerCase()) || breed.toLowerCase().includes(breedName))) {
+        bonusScore += VISUAL_FEATURE_BREED_PREFERENCES.glasses.boost;
+      }
+    }
+
+    return {
+      breed: item.breed,
+      score: Math.min(item.score + bonusScore, 1.0) // Cap at 1.0
+    };
+  });
+}
+
 function colorSimilarity(color1: string, color2: string): number {
   // Simple color name matching - in a real app you'd use color space distance
   const colorGroups: Record<string, string[]> = {
@@ -342,10 +454,10 @@ export async function findBreedMatch(facialFeatures: FacialFeatures): Promise<Br
   const { colors } = facialFeatures;
 
   // Calculate scores for all breeds
-  const breedScores = DOG_BREEDS.map(breed => ({
+  const breedScores = applyVisualFeatureBonuses(facialFeatures, DOG_BREEDS.map(breed => ({
     breed,
     score: calculateBreedScore(colors, breed)
-  }));
+  })));
 
   // Sort by score and get the best match
   breedScores.sort((a, b) => b.score - a.score);
@@ -368,7 +480,9 @@ export async function findBreedMatch(facialFeatures: FacialFeatures): Promise<Br
     breed: breedName,
     confidence,
     reasoning,
-    dogImage
+    dogImage,
+    faceShape: facialFeatures.faceShape,
+    numberOfFaces: facialFeatures.numberOfFaces
   };
 
   // Add breed information if available
@@ -390,10 +504,13 @@ export async function getBreedSuggestions(facialFeatures: FacialFeatures, count:
   const { colors } = facialFeatures;
 
   // Calculate scores for all breeds
-  const breedScores = DOG_BREEDS.map(breed => ({
+  let breedScores = DOG_BREEDS.map(breed => ({
     breed,
     score: calculateBreedScore(colors, breed)
   }));
+
+  // Apply visual feature bonuses
+  breedScores = applyVisualFeatureBonuses(facialFeatures, breedScores);
 
   // Sort by score and get top matches
   breedScores.sort((a, b) => b.score - a.score);
@@ -414,7 +531,9 @@ export async function getBreedSuggestions(facialFeatures: FacialFeatures, count:
       breed: breedName,
       confidence,
       reasoning,
-      dogImage
+      dogImage,
+      faceShape: facialFeatures.faceShape,
+      numberOfFaces: facialFeatures.numberOfFaces
     };
 
     if (breedInfo) {
@@ -464,9 +583,22 @@ export async function findBreedMatchFromAllBreeds(facialFeatures: FacialFeatures
     console.log(`Testing ${breedsToTest.length} breeds for matching`);
 
     // Calculate scores for all candidate breeds
-    const breedScores = breedsToTest.map(breed => ({
+    let breedScores = breedsToTest.map(breed => ({
       breed,
       score: calculateDynamicBreedScore(colors, breed)
+    }));
+
+    // Apply visual feature bonuses to breed names
+    const breedScoresForBonus = breedScores.map(item => ({
+      breed: item.breed.fullName || item.breed.name || item.breed,
+      score: item.score
+    }));
+    const boostedScores = applyVisualFeatureBonuses(facialFeatures, breedScoresForBonus);
+
+    // Map back the boosted scores
+    breedScores = breedScores.map((item, index) => ({
+      breed: item.breed,
+      score: boostedScores[index].score
     }));
 
     // Sort by score and get the best match
@@ -492,7 +624,9 @@ export async function findBreedMatchFromAllBreeds(facialFeatures: FacialFeatures
       breed: breedName,
       confidence,
       reasoning,
-      dogImage
+      dogImage,
+      faceShape: facialFeatures.faceShape,
+      numberOfFaces: facialFeatures.numberOfFaces
     };
 
     // Add breed information if available
