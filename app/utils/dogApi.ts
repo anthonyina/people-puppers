@@ -223,6 +223,41 @@ export function getBreedApiPath(breedName: string): string | null {
   return simple;
 }
 
+// Get breed description from Wikipedia API as fallback
+export async function getBreedDescriptionFromWikipedia(breedName: string): Promise<string | null> {
+  try {
+    const searchTerm = `${breedName} dog breed`;
+    const searchResponse = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(searchTerm)}`
+    );
+
+    if (searchResponse.ok) {
+      const data = await searchResponse.json();
+      if (data.extract && data.extract.length > 50) {
+        return data.extract;
+      }
+    }
+
+    // Try alternative search term
+    const altSearchTerm = breedName;
+    const altResponse = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(altSearchTerm)}`
+    );
+
+    if (altResponse.ok) {
+      const altData = await altResponse.json();
+      if (altData.extract && altData.extract.length > 50) {
+        return altData.extract;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching Wikipedia description:', error);
+    return null;
+  }
+}
+
 // Legacy function for backward compatibility
 export function normalizeBreedName(breedName: string): string {
   return getBreedApiPath(breedName) || breedName.toLowerCase().replace(/\s+/g, '-');

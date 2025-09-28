@@ -135,14 +135,14 @@ export default function CameraCapture({ onImageCapture }: CameraCaptureProps) {
       )}
 
       <div className="text-center space-y-6">
-        <div className="relative rounded-xl overflow-hidden bg-black min-h-[300px] flex items-center justify-center">
+        <div className="relative rounded-xl overflow-hidden bg-black h-[300px] flex items-center justify-center">
           {/* Always render video element */}
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            className={`max-w-full max-h-96 object-contain ${isStreamActive ? 'block' : 'hidden'}`}
+            className={`max-w-full h-full object-contain ${isStreamActive ? 'block' : 'hidden'}`}
             style={{ transform: 'scaleX(-1)' }}
             onLoadedData={() => console.log('Video data loaded and ready to play')}
             onError={(e) => console.error('Video error:', e)}

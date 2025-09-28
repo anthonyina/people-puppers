@@ -1,5 +1,5 @@
 import { ColorAnalysis, FacialFeatures } from './imageAnalysis';
-import { getRandomDogImage, getBreedInfo, normalizeBreedName } from './dogApi';
+import { getRandomDogImage, getBreedInfo, normalizeBreedName, getBreedDescriptionFromWikipedia } from './dogApi';
 import { loadAllBreeds, getRandomBreedSelection, filterBreedsByCharacteristics, DynamicBreedCharacteristics } from './dynamicBreedLoader';
 
 export interface BreedMatch {
@@ -294,7 +294,7 @@ function generateDynamicReasoning(features: ColorAnalysis, breed: DynamicBreedCh
     reasons.push('your overall coloring and features create a harmonious match with this breed');
   }
 
-  return `Based on our analysis, ${reasons.join(', and ')}. This creates a ${Math.round(Math.min(score, 1.0) * 100)}% compatibility match!`;
+  return `Based on our analysis, ${reasons.join(', and ')}.`;
 }
 
 // Generate reasoning for the breed match (legacy static version)
@@ -334,7 +334,7 @@ function generateReasoning(features: ColorAnalysis, breed: BreedCharacteristics,
     reasons.push('your overall coloring and features create a harmonious match with this breed');
   }
 
-  return `Based on our analysis, ${reasons.join(', and ')}. This creates a ${Math.round(Math.min(score, 1.0) * 100)}% compatibility match!`;
+  return `Based on our analysis, ${reasons.join(', and ')}.`;
 }
 
 // Main function to find the best dog breed match
@@ -378,7 +378,7 @@ export async function findBreedMatch(facialFeatures: FacialFeatures): Promise<Br
       origin: breedInfo.origin || 'Unknown',
       size: `${breedInfo.height?.imperial || 'Medium height'}, ${breedInfo.weight?.imperial || 'Medium weight'}`,
       lifeSpan: breedInfo.life_span || '10-15 years',
-      description: breedInfo.description || `${breedName}s are wonderful companions known for their unique characteristics.`
+      description: breedInfo.description || await getBreedDescriptionFromWikipedia(breedName) || 'Description unavailable for this breed'
     };
   }
 
@@ -502,7 +502,7 @@ export async function findBreedMatchFromAllBreeds(facialFeatures: FacialFeatures
         origin: breedInfo.origin || 'Various regions',
         size: `${breedInfo.height?.imperial || 'Medium height'}, ${breedInfo.weight?.imperial || 'Medium weight'}`,
         lifeSpan: breedInfo.life_span || '10-15 years',
-        description: breedInfo.description || `${breedName}s are wonderful companions known for their ${selectedMatch.breed.physicalTraits.join(' and ')}.`
+        description: breedInfo.description || await getBreedDescriptionFromWikipedia(breedName) || 'Description unavailable for this breed'
       };
     } else {
       // Use dynamic breed characteristics as fallback
@@ -511,7 +511,7 @@ export async function findBreedMatchFromAllBreeds(facialFeatures: FacialFeatures
         origin: 'Various regions',
         size: `${selectedMatch.breed.size} size`,
         lifeSpan: '10-15 years',
-        description: `${breedName}s are known for their ${selectedMatch.breed.physicalTraits.join(' and ')}.`
+        description: await getBreedDescriptionFromWikipedia(breedName) || 'Description unavailable for this breed'
       };
     }
 

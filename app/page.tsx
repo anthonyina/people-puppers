@@ -58,8 +58,7 @@ export default function Home() {
             </h1>
           </div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Take a selfie and discover your dog breed twin! Our AI analyzes your features
-            to find the perfect canine match based on hair color, skin tone, and eye color.
+            Take a selfie to discover your dog breed twin! Good lighting and open eyes give the best matches.
           </p>
         </div>
 
